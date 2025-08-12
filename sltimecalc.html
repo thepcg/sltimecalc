@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sunrise & Sunset Comparison • Saranac Lake, NY vs Madison, OH</title>
+<meta name="description" content="Interactively compare sunrise, sunset, and daylight duration between Saranac Lake, NY and Madison, OH for any date." />
+<style>
+  :root{
+    --bg: #0f1220;
+    --panel: #151935;
+    --text: #eef1ff;
+    --subtle: #9aa3c1;
+    --accent-a: #6bd6ff;
+    --accent-b: #a8ff60;
+    --accent-c: #ffb86b;
+    --accent-d: #ff6bb1;
+    --grid: #2a2f55;
+    --ok: #2ecc71;
+    --warn: #ffb86b;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#f6f8ff; --panel:#ffffff; --text:#0f1220; --subtle:#576189;
+      --grid:#e9ecff;
+    }
+  }
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji", "Segoe UI Symbol";
+  }
+  .wrap{max-width:1100px; margin:0 auto; padding:24px; display:grid; gap:20px}
+  header h1{margin:0; font-size:clamp(20px,2.8vw,30px); letter-spacing:.2px}
+  header p{margin:4px 0 0; color:var(--subtle)}
+  .panel{
+    background:var(--panel); border:1px solid rgba(255,255,255,.06); border-radius:14px; padding:16px 18px;
+    box-shadow:0 6px 24px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .controls{display:flex; flex-wrap:wrap; gap:14px; align-items:center}
+  .controls label{font-weight:600}
+  .controls input[type="date"]{
+    background:transparent; color:var(--text); border:1px solid var(--grid); border-radius:10px; padding:10px 12px;
+  }
+  .quick{display:flex; gap:8px; flex-wrap:wrap}
+  .quick button{
+    background:transparent; color:var(--subtle); border:1px dashed var(--grid); padding:8px 10px; border-radius:999px; cursor:pointer
+  }
+  .quick button:hover{color:var(--text); border-style:solid}
+  .grid{
+    display:grid; gap:16px; grid-template-columns:1fr; 
+  }
+  @media(min-width:900px){ .grid{ grid-template-columns: 1.2fr .8fr } }
+  .row{display:grid; gap:8px}
+  .city{
+    display:grid; gap:8px; grid-template-columns: minmax(140px, 220px) 1fr; align-items:center;
+  }
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; font-weight:600; padding:4px 10px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid var(--grid); color:var(--text)
+  }
+  .legend{display:flex; gap:10px; flex-wrap:wrap}
+  .legend .swatch{width:12px; height:12px; border-radius:3px; display:inline-block; margin-right:6px}
+  .legend .a .swatch{background:var(--accent-a)}
+  .legend .b .swatch{background:var(--accent-b)}
+  .timeline{
+    position:relative; height:64px; background:linear-gradient(90deg, rgba(255,255,255,.03) 0 100%); border:1px solid var(--grid);
+    border-radius:10px; overflow:hidden;
+  }
+  .timeline .hour-grid{
+    position:absolute; inset:0; background-image:linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size:calc(100%/24) 100%;
+    opacity:.4; pointer-events:none;
+  }
+  .bar{
+    position:absolute; top:8px; height:48px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    color:#0b1022; font-weight:700; mix-blend:normal; outline:1px solid rgba(0,0,0,.15);
+  }
+  .bar.a{ background:var(--accent-a) }
+  .bar.b{ background:var(--accent-b) }
+  .bar small{font-weight:700; opacity:.95}
+  .metrics{display:grid; grid-template-columns: repeat(3, minmax(160px,1fr)); gap:10px}
+  .card{
+    background:rgba(255,255,255,.04); border:1px solid var(--grid); border-radius:12px; padding:12px
+  }
+  .card h4{margin:0 0 6px; font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--subtle)}
+  .card .big{font-size:24px; font-weight:800}
+  .delta{font-weight:700}
+  .delta.ok{color:var(--ok)} .delta.warn{color:var(--warn)}
+  footer{color:var(--subtle); font-size:13px}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace}
+  .sr-only{position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden}
+  .status{color:var(--subtle); font-size:13px; margin-top:6px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Sunrise, Sunset, and Daylight • Saranac Lake vs Madison</h1>
+      <p>Select a date to compute sunrise, sunset, and day length. See the differences and a 24 hour timeline for both places.</p>
+    </header>
+
+    <section class="panel controls" aria-label="Controls">
+      <div>
+        <label for="date">Pick a date</label><br/>
+        <input id="date" type="date" />
+        <div class="status" id="status"></div>
+      </div>
+      <div class="quick" aria-label="Quick picks">
+        <span class="sr-only" id="quicklabel">Quick dates</span>
+        <button type="button" aria-describedby="quicklabel" data-offset="0">Today</button>
+        <button type="button" aria-describedby="quicklabel" data-offset="1">Tomorrow</button>
+        <button type="button" aria-describedby="quicklabel" data-offset="-1">Yesterday</button>
+        <button type="button" aria-describedby="quicklabel" data-solstice="jun">June solstice</button>
+        <button type="button" aria-describedby="quicklabel" data-solstice="dec">December solstice</button>
+        <button type="button" aria-describedby="quicklabel" data-equinox="mar">March equinox</button>
+        <button type="button" aria-describedby="quicklabel" data-equinox="sep">September equinox</button>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="row">
+          <div class="legend" aria-label="Legend">
+            <span class="a"><i class="swatch"></i> Saranac Lake, NY</span>
+            <span class="b"><i class="swatch"></i> Madison, OH</span>
+          </div>
+
+          <div class="city">
+            <div>
+              <div class="badge">Saranac Lake, NY <span class="mono">44.324° N, 74.131° W</span></div>
+              <div class="mono" id="aTimes">Sunrise 00:00 • Sunset 00:00 • Day 00:00</div>
+            </div>
+            <div class="timeline" id="timelineA" aria-label="Timeline Saranac Lake">
+              <div class="hour-grid"></div>
+              <div class="bar a" id="barA" style="left:0%;width:0%"><small></small></div>
+            </div>
+          </div>
+
+          <div class="city">
+            <div>
+              <div class="badge">Madison, OH <span class="mono">41.772° N, 81.049° W</span></div>
+              <div class="mono" id="bTimes">Sunrise 00:00 • Sunset 00:00 • Day 00:00</div>
+            </div>
+            <div class="timeline" id="timelineB" aria-label="Timeline Madison">
+              <div class="hour-grid"></div>
+              <div class="bar b" id="barB" style="left:0%;width:0%"><small></small></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="panel">
+        <div class="metrics">
+          <div class="card">
+            <h4>Difference in sunrise</h4>
+            <div class="big" id="deltaRise">0 min</div>
+            <div class="mono" id="whoEarlierRise">Same time</div>
+          </div>
+          <div class="card">
+            <h4>Difference in sunset</h4>
+            <div class="big" id="deltaSet">0 min</div>
+            <div class="mono" id="whoLaterSet">Same time</div>
+          </div>
+          <div class="card">
+            <h4>Difference in day length</h4>
+            <div class="big" id="deltaLen">0 min</div>
+            <div class="mono" id="whoLonger">Same length</div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <footer class="panel">
+      <div>Times shown in America/New_York. Calculations use the standard sunrise and sunset definitions with the solar disk center at -0.833° elevation, accounting for refraction.</div>
+      <div style="margin-top:6px; font-size:12px">Solar math adapted from SunCalc by Vladimir Agafonkin, MIT License. Everything runs client side.</div>
+    </footer>
+  </div>
+
+<script>
+/* ===== Minimal SunCalc subset: sunrise/sunset =====
+   Source adapted from SunCalc (https://github.com/mourner/suncalc) MIT License
+   Reduced to what we need here: getTimes(date, lat, lng)
+*/
+(function(global){
+  const rad = Math.PI / 180;
+  const dayMs = 1000 * 60 * 60 * 24;
+  const J1970 = 2440588;
+  const J2000 = 2451545;
+  function toJulian(date){ return date.valueOf() / dayMs - 0.5 + J1970; }
+  function fromJulian(j){ return new Date((j + 0.5 - J1970) * dayMs); }
+  function toDays(date){ return toJulian(date) - J2000; }
+
+  const e = rad * 23.4397; // obliquity
+
+  function rightAscension(l, b){ return Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l)); }
+  function declination(l, b){ return Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l)); }
+
+  function solarMeanAnomaly(d){ return rad * (357.5291 + 0.98560028 * d); }
+  function eclipticLongitude(M){
+    const C = rad * (1.9148 * Math.sin(M) + 0.0200 * Math.sin(2*M) + 0.0003 * Math.sin(3*M));
+    const P = rad * 102.9372; // perihelion of the Earth
+    return M + C + P + Math.PI;
+  }
+
+  function julianCycle(d, lw){ return Math.round(d - 0.0009 - lw / (2 * Math.PI)); }
+  function approxTransit(Ht, lw, n){ return 0.0009 + (Ht + lw) / (2 * Math.PI) + n; }
+  function solarTransitJ(ds, M, L){ return J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2*L); }
+
+  function decl(l, b){ return Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l)); }
+  function hourAngle(h, phi, d){
+    return Math.acos((Math.sin(h) - Math.sin(phi) * Math.sin(d)) / (Math.cos(phi) * Math.cos(d)));
+  }
+
+  const times = [
+    [-0.833, 'sunrise', 'sunset'] // official sunrise/sunset
+  ].map(t => [t[0] * rad, t[1], t[2]]);
+
+  function getTimes(date, lat, lng){
+    const lw = rad * -lng;
+    const phi = rad * lat;
+    const d = toDays(date);
+    const n = julianCycle(d, lw);
+    const ds = approxTransit(0, lw, n);
+    const M = solarMeanAnomaly(ds);
+    const L = eclipticLongitude(M);
+    const dec = decl(L, 0);
+    const Jnoon = solarTransitJ(ds, M, L);
+
+    const result = { solarNoon: fromJulian(Jnoon), nadir: fromJulian(Jnoon - 0.5) };
+
+    for (let i=0;i<times.length;i++){
+      const h0 = times[i][0];
+      const w = hourAngle(h0, phi, dec);
+      const a = approxTransit(-w, lw, n);
+      const b = approxTransit( w, lw, n);
+      const Jset = solarTransitJ(b, M, L);
+      const Jrise = solarTransitJ(a, M, L);
+      result[times[i][1]] = fromJulian(Jrise);
+      result[times[i][2]] = fromJulian(Jset);
+    }
+    return result;
+  }
+
+  global.__SunCalcLite__ = { getTimes };
+})(window);
+
+/* ===== App logic ===== */
+const places = {
+  saranac: { name: "Saranac Lake, NY", lat: 44.324, lon: -74.131, colorClass: "a", tz: "America/New_York" },
+  madison: { name: "Madison, OH",      lat: 41.772, lon: -81.049, colorClass: "b", tz: "America/New_York" }
+};
+
+const el = {
+  date: document.getElementById('date'),
+  aTimes: document.getElementById('aTimes'),
+  bTimes: document.getElementById('bTimes'),
+  barA: document.getElementById('barA'),
+  barB: document.getElementById('barB'),
+  deltaRise: document.getElementById('deltaRise'),
+  deltaSet: document.getElementById('deltaSet'),
+  deltaLen: document.getElementById('deltaLen'),
+  whoEarlierRise: document.getElementById('whoEarlierRise'),
+  whoLaterSet: document.getElementById('whoLaterSet'),
+  whoLonger: document.getElementById('whoLonger'),
+  quickButtons: document.querySelectorAll('.quick button'),
+  status: document.getElementById('status')
+};
+
+function pad2(n){ return n < 10 ? '0' + n : '' + n; }
+function formatInputDateLocal(d){ return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate()); }
+
+function fmtHM(d, tz="America/New_York"){
+  try {
+    return new Intl.DateTimeFormat('en-US',{hour:'2-digit', minute:'2-digit', hour12:true, timeZone: tz}).format(d);
+  } catch(e){
+    // Fallback to device local if a timezone impl is missing (rare on iOS)
+    return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  }
+}
+function minutesBetween(a,b){ return Math.round((a - b) / 60000); }
+function durationHM(mins){
+  const m = Math.max(0, Math.round(mins));
+  const hh = Math.floor(m/60), mm = m%60;
+  return hh + 'h ' + pad2(mm) + 'm';
+}
+function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+function compute(localDate){
+  // Use device-local midnight so sunrise and sunset stay within the same nominal day in Eastern time
+  const day = new Date(localDate.getFullYear(), localDate.getMonth(), localDate.getDate());
+
+  const A = places.saranac;
+  const B = places.madison;
+
+  const tA = __SunCalcLite__.getTimes(day, A.lat, A.lon);
+  const tB = __SunCalcLite__.getTimes(day, B.lat, B.lon);
+
+  // Day length in minutes (positive since both are same local day reference)
+  const lenA = minutesBetween(tA.sunset, tA.sunrise);
+  const lenB = minutesBetween(tB.sunset, tB.sunrise);
+
+  // Update text lines
+  el.aTimes.textContent = 'Sunrise ' + fmtHM(tA.sunrise, A.tz) + ' • Sunset ' + fmtHM(tA.sunset, A.tz) + ' • Day ' + durationHM(lenA);
+  el.bTimes.textContent = 'Sunrise ' + fmtHM(tB.sunrise, B.tz) + ' • Sunset ' + fmtHM(tB.sunset, B.tz) + ' • Day ' + durationHM(lenB);
+
+  // Update bars on 24 hour band using device-local clock
+  drawBar(el.barA, tA.sunrise, tA.sunset);
+  drawBar(el.barB, tB.sunrise, tB.sunset);
+
+  // Differences
+  const riseDiff = minutesBetween(tA.sunrise, tB.sunrise);   // positive means A later than B
+  const setDiff  = minutesBetween(tA.sunset,  tB.sunset);    // positive means A later than B
+  const lenDiff  = lenA - lenB;
+
+  setDelta(el.deltaRise, el.whoEarlierRise, riseDiff, 'earlier sunrise');
+  setDelta(el.deltaSet,  el.whoLaterSet,    setDiff,  'later sunset');
+  setDelta(el.deltaLen,  el.whoLonger,      lenDiff,  'longer day');
+
+  el.status.textContent = 'Date: ' + formatInputDateLocal(day);
+}
+
+function setDelta(valEl, whoEl, diffMin, phrase){
+  const abs = Math.abs(diffMin);
+  valEl.textContent = abs === 0 ? '0 min' : abs + ' min';
+  if (abs === 0){
+    whoEl.textContent = 'Same time';
+    valEl.className = 'big delta';
+    return;
+  }
+  const who = diffMin < 0 ? 'Saranac Lake' : 'Madison';
+  const qualifier = phrase;
+  whoEl.textContent = who + ' has the ' + qualifier;
+  valEl.className = 'big delta ' + (diffMin < 0 ? 'ok' : 'warn');
+}
+
+function minutesSinceLocalMidnight(d){
+  return d.getHours()*60 + d.getMinutes();
+}
+
+function drawBar(node, rise, set){
+  // Map 00:00 - 24:00 to 0 - 100% using device-local time
+  const start = minutesSinceLocalMidnight(rise);
+  const end   = minutesSinceLocalMidnight(set);
+
+  let dur = end - start;
+  // If end wrapped after midnight for any reason, normalize to next day
+  if (dur < 0) dur += 24*60;
+
+  const leftPct = clamp01(start / (24*60)) * 100;
+  const widthPct = clamp01(dur / (24*60)) * 100;
+  node.style.left = leftPct + '%';
+  node.style.width = widthPct + '%';
+  node.querySelector('small').textContent = durationHM(dur);
+  node.title = 'Daylight: ' + durationHM(dur) + ' (Sunrise ' + fmtHM(rise) + ' - Sunset ' + fmtHM(set) + ')';
+}
+
+/* Quick date helpers */
+function setDateInput(d){
+  el.date.value = formatInputDateLocal(d);
+  // compute on the next frame to ensure the input UI updates first
+  requestAnimationFrame(() => compute(d));
+}
+function approximateSolsticeEquinox(year, which){
+  switch(which){
+    case 'jun': return new Date(year, 5, 21);
+    case 'dec': return new Date(year,11,21);
+    case 'mar': return new Date(year, 2, 20);
+    case 'sep': return new Date(year, 8, 22);
+  }
+  return new Date(year, 0, 1);
+}
+
+/* Init */
+(function init(){
+  try {
+    const now = new Date();
+    setDateInput(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+
+    el.date.addEventListener('change', e => {
+      const parts = e.target.value.split('-').map(Number);
+      if (parts.length === 3 && !Number.isNaN(parts[0])){
+        const d = new Date(parts[0], parts[1]-1, parts[2]);
+        compute(d);
+      }
+    });
+
+    el.quickButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const offset = btn.getAttribute('data-offset');
+        const solstice = btn.getAttribute('data-solstice');
+        const equinox = btn.getAttribute('data-equinox');
+        let base;
+        if (offset !== null){
+          const cur = el.date.value ? (function(){ const p = el.date.value.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); })() : new Date();
+          base = new Date(cur);
+          base.setDate(base.getDate() + parseInt(offset,10));
+        } else if (solstice){
+          const y = (el.date.value ? new Date(el.date.value).getFullYear() : new Date().getFullYear());
+          base = approximateSolsticeEquinox(y, solstice);
+        } else if (equinox){
+          const y = (el.date.value ? new Date(el.date.value).getFullYear() : new Date().getFullYear());
+          base = approximateSolsticeEquinox(y, equinox);
+        }
+        if (base) setDateInput(base);
+      });
+    });
+  } catch(err){
+    console.error(err);
+    el.status.textContent = 'Error: ' + err.message;
+  }
+})();
+</script>
+</body>
+</html>
